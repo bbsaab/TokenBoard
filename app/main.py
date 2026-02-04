@@ -203,17 +203,37 @@ def api_forecast():
                 except (ValueError, TypeError):
                     pass
 
-    # Forecast for weekly window using OAuth-derived limit
-    # Use historical daily average for stable, predictable forecasts
-    weekly_time_to_limit = None
-    will_exceed_weekly = False
-    days_to_weekly_limit = None
-    critical_weekly = False  # True if will hit limit before reset
+    # Calculate historical daily burn rate from recent days
+    historical_daily_burn_rate = 0
+    daily_data = db.get_daily_aggregates(days=7)
+    if daily_data:
+        active_days = [d for d in daily_data if d.get("total_tokens", 0) > 0]
+        if active_days:
+            total_tokens = sum(d.get("total_tokens", 0) for d in active_days)
+            historical_daily_burn_rate = total_tokens / len(active_days)
 
+    # Historical hourly burn rate = daily average / 24
+    historical_hourly_burn_rate = historical_daily_burn_rate / 24 if historical_daily_burn_rate > 0 else 0
+
+    # Session daily burn rate = current hourly rate * 24
+    session_daily_burn_rate = burn_rate * 24 if burn_rate > 0 else 0
+
+    # Get limits and reset times
+    five_hour_limit = calibration.get("five_hour", {}).get("derived_limit") or config.FIVE_HOUR_LIMIT_TOKENS
     weekly_limit = calibration.get("seven_day", {}).get("derived_limit")
+    five_hour_resets_at = calibration.get("five_hour", {}).get("resets_at")
     weekly_resets_at = calibration.get("seven_day", {}).get("resets_at")
 
-    # Calculate days until reset
+    # Calculate hours until 5-hour reset
+    hours_until_5h_reset = 5  # Default fallback
+    if five_hour_resets_at:
+        try:
+            reset_time = datetime.fromisoformat(five_hour_resets_at.replace("Z", "+00:00"))
+            hours_until_5h_reset = (reset_time - datetime.now(reset_time.tzinfo)).total_seconds() / 3600
+        except (ValueError, TypeError):
+            pass
+
+    # Calculate days until weekly reset
     days_until_reset = 7  # Default fallback
     if weekly_resets_at:
         try:
@@ -222,44 +242,97 @@ def api_forecast():
         except (ValueError, TypeError):
             pass
 
-    # Calculate historical daily burn rate from recent days
-    daily_burn_rate = 0
-    daily_data = db.get_daily_aggregates(days=7)
-    if daily_data:
-        # Use days with actual usage
-        active_days = [d for d in daily_data if d.get("total_tokens", 0) > 0]
-        if active_days:
-            total_tokens = sum(d.get("total_tokens", 0) for d in active_days)
-            daily_burn_rate = total_tokens / len(active_days)
-
-    if weekly_limit and daily_burn_rate > 0 and weekly_total < weekly_limit:
-        remaining_weekly = weekly_limit - weekly_total
-        days_to_weekly_limit = remaining_weekly / daily_burn_rate
-
-        # Always calculate time to limit for display consistency
-        if days_to_weekly_limit < 1:
-            hours_to_limit = days_to_weekly_limit * 24
-            weekly_time_to_limit = f"{hours_to_limit:.1f}h"
+    # Helper function to format time to limit
+    def format_time_to_limit(hours):
+        if hours is None:
+            return None
+        if hours < 1:
+            return f"{int(hours * 60)}m"
+        elif hours < 24:
+            return f"{hours:.1f}h"
         else:
-            weekly_time_to_limit = f"{days_to_weekly_limit:.1f}d"
+            days = hours / 24
+            return f"{days:.1f}d"
 
-        # Mark as critical warning if we'll hit the limit before the window resets
-        if days_to_weekly_limit < days_until_reset:
-            will_exceed_weekly = True
-            critical_weekly = True
+    # === 5-HOUR SESSION FORECASTS ===
+    five_hour_remaining = five_hour_limit - current_total if five_hour_limit else 0
+
+    # Session forecast (current burn rate)
+    five_hour_session_forecast = None
+    five_hour_session_critical = False
+    if burn_rate > 0 and five_hour_remaining > 0:
+        hours_to_limit = five_hour_remaining / burn_rate
+        five_hour_session_forecast = format_time_to_limit(hours_to_limit)
+        if hours_to_limit < hours_until_5h_reset:
+            five_hour_session_critical = True
+
+    # Historical forecast (historical burn rate)
+    five_hour_historical_forecast = None
+    five_hour_historical_critical = False
+    if historical_hourly_burn_rate > 0 and five_hour_remaining > 0:
+        hours_to_limit = five_hour_remaining / historical_hourly_burn_rate
+        five_hour_historical_forecast = format_time_to_limit(hours_to_limit)
+        if hours_to_limit < hours_until_5h_reset:
+            five_hour_historical_critical = True
+
+    # === WEEKLY SESSION FORECASTS ===
+    weekly_remaining = weekly_limit - weekly_total if weekly_limit else 0
+
+    # Session forecast (current burn rate extrapolated to daily)
+    weekly_session_forecast = None
+    weekly_session_critical = False
+    if session_daily_burn_rate > 0 and weekly_remaining > 0:
+        days_to_limit = weekly_remaining / session_daily_burn_rate
+        weekly_session_forecast = format_time_to_limit(days_to_limit * 24)
+        if days_to_limit < days_until_reset:
+            weekly_session_critical = True
+
+    # Historical forecast (historical daily burn rate)
+    weekly_historical_forecast = None
+    weekly_historical_critical = False
+    if historical_daily_burn_rate > 0 and weekly_remaining > 0:
+        days_to_limit = weekly_remaining / historical_daily_burn_rate
+        weekly_historical_forecast = format_time_to_limit(days_to_limit * 24)
+        if days_to_limit < days_until_reset:
+            weekly_historical_critical = True
 
     return jsonify({
+        # New structured data for 2x2 grid
+        "five_hour": {
+            "session": {
+                "burn_rate": int(burn_rate / 60) if burn_rate > 0 else 0,  # tokens/min
+                "burn_rate_unit": "tok/min",
+                "forecast": five_hour_session_forecast,
+                "critical": five_hour_session_critical
+            },
+            "historical": {
+                "burn_rate": int(historical_hourly_burn_rate / 60) if historical_hourly_burn_rate > 0 else 0,
+                "burn_rate_unit": "tok/min",
+                "forecast": five_hour_historical_forecast,
+                "critical": five_hour_historical_critical
+            },
+            "hours_until_reset": round(hours_until_5h_reset, 1)
+        },
+        "weekly": {
+            "session": {
+                "burn_rate": int(session_daily_burn_rate / 1000000) if session_daily_burn_rate > 0 else 0,  # M tokens/day
+                "burn_rate_unit": "M/day",
+                "forecast": weekly_session_forecast,
+                "critical": weekly_session_critical
+            },
+            "historical": {
+                "burn_rate": int(historical_daily_burn_rate / 1000000) if historical_daily_burn_rate > 0 else 0,
+                "burn_rate_unit": "M/day",
+                "forecast": weekly_historical_forecast,
+                "critical": weekly_historical_critical
+            },
+            "days_until_reset": round(days_until_reset, 1)
+        },
+        # Legacy fields for backward compatibility
         "hourly_rate": hourly_rate,
         "daily_projection": daily_projection,
         "weekly_projection": weekly_projection,
-        "five_hour_projection": five_hour_forecast,
-        "will_exceed_5h": will_exceed_5h,
-        "time_to_limit": time_to_limit,
-        "critical_5h": critical_5h,
         "burn_rate_per_min": int(burn_rate / 60) if burn_rate > 0 else 0,
-        "will_exceed_weekly": will_exceed_weekly,
-        "weekly_time_to_limit": weekly_time_to_limit,
-        "critical_weekly": critical_weekly,
     })
 
 

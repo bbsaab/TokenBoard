@@ -226,6 +226,66 @@ header .subtitle {
     color: var(--text-secondary);
 }
 
+/* Reset Info */
+.reset-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.reset-info .stat-label {
+    margin-bottom: 0;
+}
+
+/* Forecast Grid - 2x2 matrix */
+.forecast-grid {
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.forecast-header {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.forecast-header span {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+}
+
+.forecast-header span:first-child {
+    text-align: left;
+}
+
+.forecast-row {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.forecast-row .row-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.forecast-row .stat-value {
+    text-align: center;
+    font-size: 0.95rem;
+}
+
 /* Charts Section */
 .charts-section {
     display: grid;

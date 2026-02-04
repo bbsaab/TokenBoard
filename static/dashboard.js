@@ -144,15 +144,7 @@ async function fetchUsage() {
             updateProgressBar('weeklyProgress', weeklyPercent);
         }
 
-        // Days remaining in week
-        const daysRemaining = 7 - new Date().getDay();
-        const weeklyDaysEl = document.getElementById('weeklyDaysRemaining');
-        if (weeklyDaysEl) weeklyDaysEl.textContent = daysRemaining + ' days';
-
-        // Daily average
-        const dailyAvg = weeklyTotal > 0 ? Math.round(weeklyTotal / 7) : 0;
-        const weeklyDailyAvgEl = document.getElementById('weeklyDailyAvg');
-        if (weeklyDailyAvgEl) weeklyDailyAvgEl.textContent = formatTokens(dailyAvg) + '/day';
+        // Note: Reset times are set by fetchCalibration() using actual OAuth data
 
         // Update status indicator with the higher percentage
         updateStatusIndicator(Math.max(hourlyPercent, weeklyPercent));
@@ -190,6 +182,30 @@ function updateModelBreakdown(elementId, byModel) {
     }
 }
 
+// Helper to format forecast cell with proper styling
+function formatForecastCell(element, forecast, critical) {
+    if (!element) return;
+
+    if (forecast) {
+        if (critical) {
+            element.innerHTML = '<span class="critical-warning">' + forecast + '</span>';
+            element.className = 'stat-value text-red critical';
+        } else {
+            element.textContent = forecast;
+            element.className = 'stat-value text-green';
+        }
+    } else {
+        element.textContent = 'Safe';
+        element.className = 'stat-value text-green';
+    }
+}
+
+// Helper to format burn rate cell
+function formatBurnRateCell(element, rate, unit) {
+    if (!element) return;
+    element.textContent = rate > 0 ? formatNumber(rate) + ' ' + unit : 'Idle';
+}
+
 // Fetch and update forecast data
 async function fetchForecast() {
     try {
@@ -197,50 +213,67 @@ async function fetchForecast() {
         if (!response.ok) throw new Error('Failed to fetch forecast');
         const data = await response.json();
 
-        // Update burn rate
-        const burnRateEl = document.getElementById('hourlyBurnRate');
-        if (burnRateEl) {
-            const perMin = data.burn_rate_per_min || 0;
-            burnRateEl.textContent = perMin > 0 ? formatNumber(perMin) + ' tok/min' : 'Idle';
-        }
+        // === 5-HOUR SESSION ===
+        const fiveHour = data.five_hour || {};
 
-        // Update hourly forecast
-        const hourlyForecastEl = document.getElementById('hourlyForecast');
-        if (hourlyForecastEl) {
-            if (data.will_exceed_5h && data.time_to_limit) {
-                if (data.critical_5h) {
-                    // Critical: will hit limit BEFORE reset
-                    hourlyForecastEl.innerHTML = '<span class="critical-warning">⚠ LIMIT IN ' + data.time_to_limit.toUpperCase() + '</span>';
-                    hourlyForecastEl.className = 'stat-value text-red critical';
-                } else {
-                    hourlyForecastEl.textContent = 'Limit in ' + data.time_to_limit;
-                    hourlyForecastEl.className = 'stat-value text-yellow';
-                }
-            } else {
-                hourlyForecastEl.textContent = data.five_hour_projection ?
-                    formatTokens(data.five_hour_projection) + ' projected' : 'Safe';
-                hourlyForecastEl.className = 'stat-value text-green';
-            }
-        }
+        // Session burn rate
+        formatBurnRateCell(
+            document.getElementById('hourlyBurnRateSession'),
+            fiveHour.session?.burn_rate || 0,
+            fiveHour.session?.burn_rate_unit || 'tok/min'
+        );
 
-        // Note: Reset time is set by fetchCalibration() using actual OAuth data
+        // Historical burn rate
+        formatBurnRateCell(
+            document.getElementById('hourlyBurnRateHistorical'),
+            fiveHour.historical?.burn_rate || 0,
+            fiveHour.historical?.burn_rate_unit || 'tok/min'
+        );
 
-        // Update weekly forecast
-        const weeklyForecastEl = document.getElementById('weeklyForecast');
-        if (weeklyForecastEl) {
-            if (data.critical_weekly && data.weekly_time_to_limit) {
-                // Critical: will hit limit BEFORE reset
-                weeklyForecastEl.innerHTML = '<span class="critical-warning">⚠ LIMIT IN ' + data.weekly_time_to_limit.toUpperCase() + '</span>';
-                weeklyForecastEl.className = 'stat-value text-red critical';
-            } else if (data.weekly_time_to_limit) {
-                // Safe: will hit limit AFTER reset (informational)
-                weeklyForecastEl.textContent = 'Limit in ' + data.weekly_time_to_limit;
-                weeklyForecastEl.className = 'stat-value text-green';
-            } else {
-                weeklyForecastEl.textContent = 'Safe';
-                weeklyForecastEl.className = 'stat-value text-green';
-            }
-        }
+        // Session forecast
+        formatForecastCell(
+            document.getElementById('hourlyForecastSession'),
+            fiveHour.session?.forecast,
+            fiveHour.session?.critical
+        );
+
+        // Historical forecast
+        formatForecastCell(
+            document.getElementById('hourlyForecastHistorical'),
+            fiveHour.historical?.forecast,
+            fiveHour.historical?.critical
+        );
+
+        // === WEEKLY SESSION ===
+        const weekly = data.weekly || {};
+
+        // Session burn rate
+        formatBurnRateCell(
+            document.getElementById('weeklyBurnRateSession'),
+            weekly.session?.burn_rate || 0,
+            weekly.session?.burn_rate_unit || 'M/day'
+        );
+
+        // Historical burn rate
+        formatBurnRateCell(
+            document.getElementById('weeklyBurnRateHistorical'),
+            weekly.historical?.burn_rate || 0,
+            weekly.historical?.burn_rate_unit || 'M/day'
+        );
+
+        // Session forecast
+        formatForecastCell(
+            document.getElementById('weeklyForecastSession'),
+            weekly.session?.forecast,
+            weekly.session?.critical
+        );
+
+        // Historical forecast
+        formatForecastCell(
+            document.getElementById('weeklyForecastHistorical'),
+            weekly.historical?.forecast,
+            weekly.historical?.critical
+        );
 
     } catch (error) {
         console.error('Error fetching forecast:', error);
