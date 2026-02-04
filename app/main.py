@@ -77,8 +77,38 @@ def static_files(filename):
 @app.route("/api/usage")
 def api_usage():
     """Return current usage stats for 5-hour window and weekly."""
-    five_hour = db.get_usage_in_window(hours=5)
-    weekly = db.get_usage_in_days(days=7)
+    # Try to get accurate window start times from OAuth resets_at
+    oauth_data = usage_api.get_oauth_usage_cached()
+
+    five_hour_since = None
+    weekly_since = None
+
+    if oauth_data:
+        # Calculate 5-hour window start from resets_at
+        five_hour_resets = oauth_data.get("five_hour", {}).get("resets_at")
+        if five_hour_resets:
+            try:
+                reset_time = datetime.fromisoformat(five_hour_resets.replace("Z", "+00:00"))
+                # Window started 5 hours before it resets
+                window_start = reset_time - timedelta(hours=5)
+                five_hour_since = window_start.isoformat()
+            except (ValueError, TypeError):
+                pass
+
+        # Calculate 7-day window start from resets_at
+        weekly_resets = oauth_data.get("seven_day", {}).get("resets_at")
+        if weekly_resets:
+            try:
+                reset_time = datetime.fromisoformat(weekly_resets.replace("Z", "+00:00"))
+                # Window started 7 days before it resets
+                window_start = reset_time - timedelta(days=7)
+                weekly_since = window_start.isoformat()
+            except (ValueError, TypeError):
+                pass
+
+    # Get usage with OAuth-aligned windows (fall back to rolling windows)
+    five_hour = db.get_usage_in_window(since=five_hour_since, hours=5)
+    weekly = db.get_usage_in_window(since=weekly_since, hours=7*24)
 
     return jsonify({
         "five_hour": five_hour,
@@ -174,36 +204,49 @@ def api_forecast():
                     pass
 
     # Forecast for weekly window using OAuth-derived limit
+    # Use historical daily average for stable, predictable forecasts
     weekly_time_to_limit = None
     will_exceed_weekly = False
-    hours_to_weekly_limit = None
+    days_to_weekly_limit = None
     critical_weekly = False  # True if will hit limit before reset
 
     weekly_limit = calibration.get("seven_day", {}).get("derived_limit")
+    weekly_resets_at = calibration.get("seven_day", {}).get("resets_at")
 
-    if weekly_limit and burn_rate > 0 and weekly_total < weekly_limit:
+    # Calculate days until reset
+    days_until_reset = 7  # Default fallback
+    if weekly_resets_at:
+        try:
+            reset_time = datetime.fromisoformat(weekly_resets_at.replace("Z", "+00:00"))
+            days_until_reset = (reset_time - datetime.now(reset_time.tzinfo)).total_seconds() / (3600 * 24)
+        except (ValueError, TypeError):
+            pass
+
+    # Calculate historical daily burn rate from recent days
+    daily_burn_rate = 0
+    daily_data = db.get_daily_aggregates(days=7)
+    if daily_data:
+        # Use days with actual usage
+        active_days = [d for d in daily_data if d.get("total_tokens", 0) > 0]
+        if active_days:
+            total_tokens = sum(d.get("total_tokens", 0) for d in active_days)
+            daily_burn_rate = total_tokens / len(active_days)
+
+    if weekly_limit and daily_burn_rate > 0 and weekly_total < weekly_limit:
         remaining_weekly = weekly_limit - weekly_total
-        hours_to_weekly_limit = remaining_weekly / burn_rate
-        days_to_limit = hours_to_weekly_limit / 24
+        days_to_weekly_limit = remaining_weekly / daily_burn_rate
 
-        # Only show if we'll hit the limit within the week
-        if days_to_limit < 7:
+        # Always calculate time to limit for display consistency
+        if days_to_weekly_limit < 1:
+            hours_to_limit = days_to_weekly_limit * 24
+            weekly_time_to_limit = f"{hours_to_limit:.1f}h"
+        else:
+            weekly_time_to_limit = f"{days_to_weekly_limit:.1f}d"
+
+        # Mark as critical warning if we'll hit the limit before the window resets
+        if days_to_weekly_limit < days_until_reset:
             will_exceed_weekly = True
-            if days_to_limit < 1:
-                weekly_time_to_limit = f"{hours_to_weekly_limit:.1f}h"
-            else:
-                weekly_time_to_limit = f"{days_to_limit:.1f}d"
-
-            # Check if we'll hit limit before reset (critical warning)
-            weekly_resets_at = calibration.get("seven_day", {}).get("resets_at")
-            if weekly_resets_at:
-                try:
-                    reset_time = datetime.fromisoformat(weekly_resets_at.replace("Z", "+00:00"))
-                    hours_until_reset = (reset_time - datetime.now(reset_time.tzinfo)).total_seconds() / 3600
-                    if hours_to_weekly_limit < hours_until_reset:
-                        critical_weekly = True
-                except (ValueError, TypeError):
-                    pass
+            critical_weekly = True
 
     return jsonify({
         "hourly_rate": hourly_rate,
@@ -253,9 +296,36 @@ def api_calibration():
     This allows cross-referencing our JSONL-based calculations with
     Anthropic's official usage percentages from /usage.
     """
-    # Get calculated token totals
-    five_hour = db.get_usage_in_window(hours=5)
-    weekly = db.get_usage_in_days(days=7)
+    # Try to get accurate window start times from OAuth resets_at
+    oauth_data = usage_api.get_oauth_usage_cached()
+
+    five_hour_since = None
+    weekly_since = None
+
+    if oauth_data:
+        # Calculate 5-hour window start from resets_at
+        five_hour_resets = oauth_data.get("five_hour", {}).get("resets_at")
+        if five_hour_resets:
+            try:
+                reset_time = datetime.fromisoformat(five_hour_resets.replace("Z", "+00:00"))
+                window_start = reset_time - timedelta(hours=5)
+                five_hour_since = window_start.isoformat()
+            except (ValueError, TypeError):
+                pass
+
+        # Calculate 7-day window start from resets_at
+        weekly_resets = oauth_data.get("seven_day", {}).get("resets_at")
+        if weekly_resets:
+            try:
+                reset_time = datetime.fromisoformat(weekly_resets.replace("Z", "+00:00"))
+                window_start = reset_time - timedelta(days=7)
+                weekly_since = window_start.isoformat()
+            except (ValueError, TypeError):
+                pass
+
+    # Get calculated token totals with OAuth-aligned windows
+    five_hour = db.get_usage_in_window(since=five_hour_since, hours=5)
+    weekly = db.get_usage_in_window(since=weekly_since, hours=7*24)
 
     calculated_5h = five_hour.get("total_tokens", 0)
     calculated_7d = weekly.get("total_tokens", 0)

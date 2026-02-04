@@ -18,8 +18,8 @@ services:
       - CLAUDE_DATA_PATH=/claude-data
       # SQLite database path
       - DB_PATH=/app/data/usage.db
-      # 5-hour limit estimated from /usage showing 35% at 44.3M tokens
-      - FIVE_HOUR_LIMIT_TOKENS=126500000
+      # 5-hour limit based on observed OAuth data (~90M at 97%)
+      - FIVE_HOUR_LIMIT_TOKENS=92000000
       # - WEEKLY_OPUS_HOURS=35
       # - WEEKLY_SONNET_HOURS=280
       # - OPUS_TOKENS_PER_HOUR=50000

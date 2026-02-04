@@ -128,19 +128,28 @@ def get_calibration_data(calculated_5h_tokens: int, calculated_7d_tokens: int) -
         # 5-hour window
         five_hour = oauth_data.get("five_hour", {})
         five_hour_pct = five_hour.get("utilization")
-        if five_hour_pct is not None and five_hour_pct > 0:
+        if five_hour_pct is not None:
             result["five_hour"]["official_percent"] = five_hour_pct
             result["five_hour"]["resets_at"] = five_hour.get("resets_at")
-            # Derive the limit: tokens / (percent/100)
-            result["five_hour"]["derived_limit"] = int(calculated_5h_tokens / (five_hour_pct / 100))
+
+            # Only derive limit when percentage is meaningful (>5%)
+            # Low % with high local tokens = window just reset, local data is stale
+            if five_hour_pct >= 5:
+                result["five_hour"]["derived_limit"] = int(calculated_5h_tokens / (five_hour_pct / 100))
+            elif five_hour_pct > 0:
+                # Window likely just reset - use config fallback for limit
+                # Don't try to derive from mismatched data
+                pass
 
         # 7-day window
         seven_day = oauth_data.get("seven_day", {})
         seven_day_pct = seven_day.get("utilization")
-        if seven_day_pct is not None and seven_day_pct > 0:
+        if seven_day_pct is not None:
             result["seven_day"]["official_percent"] = seven_day_pct
             result["seven_day"]["resets_at"] = seven_day.get("resets_at")
-            # Derive the limit: tokens / (percent/100)
-            result["seven_day"]["derived_limit"] = int(calculated_7d_tokens / (seven_day_pct / 100))
+
+            # Only derive limit when percentage is meaningful (>5%)
+            if seven_day_pct >= 5:
+                result["seven_day"]["derived_limit"] = int(calculated_7d_tokens / (seven_day_pct / 100))
 
     return result

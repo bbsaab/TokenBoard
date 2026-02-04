@@ -228,18 +228,14 @@ async function fetchForecast() {
         // Update weekly forecast
         const weeklyForecastEl = document.getElementById('weeklyForecast');
         if (weeklyForecastEl) {
-            if (data.will_exceed_weekly && data.weekly_time_to_limit) {
-                if (data.critical_weekly) {
-                    // Critical: will hit limit BEFORE reset
-                    weeklyForecastEl.innerHTML = '<span class="critical-warning">⚠ LIMIT IN ' + data.weekly_time_to_limit.toUpperCase() + '</span>';
-                    weeklyForecastEl.className = 'stat-value text-red critical';
-                } else {
-                    weeklyForecastEl.textContent = 'Limit in ' + data.weekly_time_to_limit;
-                    weeklyForecastEl.className = 'stat-value text-yellow';
-                }
-            } else if (data.weekly_projection) {
-                weeklyForecastEl.textContent = formatTokens(data.weekly_projection) + ' projected';
-                weeklyForecastEl.className = 'stat-value';
+            if (data.critical_weekly && data.weekly_time_to_limit) {
+                // Critical: will hit limit BEFORE reset
+                weeklyForecastEl.innerHTML = '<span class="critical-warning">⚠ LIMIT IN ' + data.weekly_time_to_limit.toUpperCase() + '</span>';
+                weeklyForecastEl.className = 'stat-value text-red critical';
+            } else if (data.weekly_time_to_limit) {
+                // Safe: will hit limit AFTER reset (informational)
+                weeklyForecastEl.textContent = 'Limit in ' + data.weekly_time_to_limit;
+                weeklyForecastEl.className = 'stat-value text-green';
             } else {
                 weeklyForecastEl.textContent = 'Safe';
                 weeklyForecastEl.className = 'stat-value text-green';
@@ -419,6 +415,25 @@ async function fetchCalibration() {
                     const hourlyLimitEl = document.getElementById('hourlyLimit');
                     if (hourlyLimitEl) {
                         hourlyLimitEl.textContent = formatTokens(data.five_hour.derived_limit);
+                    }
+                }
+
+                // If OAuth shows low % (< 10%), window likely just reset
+                // Update usage display based on OAuth percentage to avoid showing stale data
+                if (pct < 10) {
+                    // Use cached limit or estimate ~92M (typical 5-hour limit)
+                    const estimatedLimit = cachedDerivedLimits.fiveHour || 92000000;
+                    const estimatedUsage = Math.round(estimatedLimit * (pct / 100));
+                    const hourlyUsageEl = document.getElementById('hourlyUsage');
+                    if (hourlyUsageEl) {
+                        hourlyUsageEl.textContent = formatTokens(estimatedUsage);
+                    }
+                    // Also update the limit display if we don't have a derived one
+                    if (!cachedDerivedLimits.fiveHour) {
+                        const hourlyLimitEl = document.getElementById('hourlyLimit');
+                        if (hourlyLimitEl) {
+                            hourlyLimitEl.textContent = formatTokens(estimatedLimit);
+                        }
                     }
                 }
             } else {

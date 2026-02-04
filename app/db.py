@@ -77,15 +77,24 @@ def insert_usage(
         conn.close()
 
 
-def get_usage_in_window(hours: float) -> dict:
+def get_usage_in_window(hours: float = None, since: str = None) -> dict:
     """
-    Get aggregated usage for the past N hours.
+    Get aggregated usage for a time window.
+
+    Args:
+        hours: Number of hours to look back from now (rolling window)
+        since: ISO timestamp to count from (absolute cutoff, takes precedence)
 
     Returns dict with total tokens by category and by model.
     """
     conn = get_connection()
     try:
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+        if since:
+            cutoff = since
+        elif hours:
+            cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+        else:
+            cutoff = (datetime.utcnow() - timedelta(hours=5)).isoformat()
 
         # Get totals
         row = conn.execute("""
