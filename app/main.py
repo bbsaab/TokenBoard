@@ -16,6 +16,7 @@ _import_status = {
     "completed": False,
     "new_records": 0,
     "total_processed": 0,
+    "last_import": None,
 }
 
 # Set up Flask with correct template and static paths
@@ -427,27 +428,35 @@ def start_watcher():
 
 
 def background_import():
-    """Run JSONL import in background thread."""
+    """Run JSONL import in background thread, repeating every 5 minutes."""
+    import time
     global _import_status
 
-    _import_status["running"] = True
+    IMPORT_INTERVAL_SECONDS = 300  # 5 minutes
     claude_path = Path(config.CLAUDE_DATA_PATH)
 
-    try:
-        if claude_path.exists():
-            print(f"Background import started: {claude_path}", flush=True)
-            new_records, total_processed = parser.import_from_directory(claude_path)
-            _import_status["new_records"] = new_records
-            _import_status["total_processed"] = total_processed
-            print(f"Background import complete: {new_records} new records from {total_processed} entries", flush=True)
-        else:
-            print(f"Warning: Claude data path not found: {claude_path}", flush=True)
-    except Exception as e:
-        print(f"Background import error: {e}", flush=True)
-    finally:
-        _import_status["running"] = False
-        _import_status["completed"] = True
-        print(f"Total records in database: {db.get_record_count()}", flush=True)
+    while True:
+        _import_status["running"] = True
+
+        try:
+            if claude_path.exists():
+                print(f"Periodic import started: {claude_path}", flush=True)
+                new_records, total_processed = parser.import_from_directory(claude_path)
+                _import_status["new_records"] = new_records
+                _import_status["total_processed"] = total_processed
+                _import_status["last_import"] = datetime.now().isoformat()
+                print(f"Periodic import complete: {new_records} new records from {total_processed} entries", flush=True)
+            else:
+                print(f"Warning: Claude data path not found: {claude_path}", flush=True)
+        except Exception as e:
+            print(f"Periodic import error: {e}", flush=True)
+        finally:
+            _import_status["running"] = False
+            _import_status["completed"] = True
+            print(f"Total records in database: {db.get_record_count()}", flush=True)
+
+        # Wait before next import cycle
+        time.sleep(IMPORT_INTERVAL_SECONDS)
 
 
 def init_app():
