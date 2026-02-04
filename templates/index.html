@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TokenBoard - Claude Usage Tracker</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>TokenBoard</h1>
+            <p class="subtitle">Claude Usage Tracker</p>
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot"></span>
+                <span class="status-text">Loading...</span>
+            </div>
+            <div class="calibration-status" id="calibrationStatus">Connecting...</div>
+        </header>
+
+        <main>
+            <!-- Usage Cards -->
+            <section class="cards-section">
+                <div class="card" id="hourlyCard">
+                    <div class="card-header">
+                        <h2>5-Hour Window</h2>
+                        <span class="refresh-time" id="hourlyRefresh"></span>
+                    </div>
+                    <div class="card-body">
+                        <div class="usage-display">
+                            <span class="usage-current" id="hourlyUsage">--</span>
+                            <span class="usage-limit">/ <span id="hourlyLimit">--</span></span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="hourlyProgress"></div>
+                        </div>
+                        <div class="percent-row">
+                            <span class="official-label">Official:</span>
+                            <span class="official-percent" id="hourlyOfficial">--%</span>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat">
+                                <span class="stat-label">Resets In</span>
+                                <span class="stat-value" id="hourlyTimeRemaining">--</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Burn Rate</span>
+                                <span class="stat-value" id="hourlyBurnRate">-- tok/min</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Forecast</span>
+                                <span class="stat-value" id="hourlyForecast">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" id="weeklyCard">
+                    <div class="card-header">
+                        <h2>Weekly Usage</h2>
+                        <span class="refresh-time" id="weeklyRefresh"></span>
+                    </div>
+                    <div class="card-body">
+                        <div class="usage-display">
+                            <span class="usage-current" id="weeklyUsage">--</span>
+                            <span class="usage-limit">/ <span id="weeklyLimit">--</span></span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="weeklyProgress"></div>
+                        </div>
+                        <div class="percent-row">
+                            <span class="official-label">Official:</span>
+                            <span class="official-percent" id="weeklyOfficial">--%</span>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat">
+                                <span class="stat-label">Resets In</span>
+                                <span class="stat-value" id="weeklyDaysRemaining">--</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Daily Avg</span>
+                                <span class="stat-value" id="weeklyDailyAvg">--</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Forecast</span>
+                                <span class="stat-value" id="weeklyForecast">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <section class="charts-section">
+                <div class="chart-card">
+                    <h3>5-Hour Rolling Usage</h3>
+                    <div class="chart-container">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <h3>Daily Usage This Week</h3>
+                    <div class="chart-container">
+                        <canvas id="weeklyChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Last updated: <span id="lastUpdated">--</span></p>
+            <p class="auto-refresh">Auto-refreshes every 30 seconds</p>
+        </footer>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

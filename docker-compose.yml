@@ -1,0 +1,27 @@
+services:
+  tokenboard:
+    build: .
+    container_name: tokenboard
+    ports:
+      - "8080:8080"
+    volumes:
+      # Claude data directory (read-only)
+      # Windows path - adjust if your user folder is different
+      - C:/Users/busin/.claude:/claude-data:ro
+      # Persistent SQLite database
+      - ./data:/app/data
+    environment:
+      - FLASK_APP=app.main
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+      # Override Claude data path to match container mount
+      - CLAUDE_DATA_PATH=/claude-data
+      # SQLite database path
+      - DB_PATH=/app/data/usage.db
+      # 5-hour limit estimated from /usage showing 35% at 44.3M tokens
+      - FIVE_HOUR_LIMIT_TOKENS=126500000
+      # - WEEKLY_OPUS_HOURS=35
+      # - WEEKLY_SONNET_HOURS=280
+      # - OPUS_TOKENS_PER_HOUR=50000
+      # - SONNET_TOKENS_PER_HOUR=100000
+    restart: unless-stopped
