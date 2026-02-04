@@ -109,12 +109,15 @@ def api_forecast():
     # Get recent hourly aggregates for burn rate calculation
     hourly_data = db.get_hourly_aggregates(hours=6)
 
-    # Convert to UsagePoint format for forecaster
+    # Convert to UsagePoint format with CUMULATIVE tokens for forecaster
+    # The burn rate function expects cumulative data for linear regression
     usage_points = []
-    for entry in hourly_data:
+    cumulative_tokens = 0
+    for entry in sorted(hourly_data, key=lambda x: x["hour"]):
         try:
             ts = datetime.fromisoformat(entry["hour"].replace("Z", "+00:00"))
-            usage_points.append(UsagePoint(timestamp=ts, tokens=entry["total_tokens"]))
+            cumulative_tokens += entry["total_tokens"]
+            usage_points.append(UsagePoint(timestamp=ts, tokens=cumulative_tokens))
         except (KeyError, ValueError):
             continue
 
@@ -130,20 +133,77 @@ def api_forecast():
     daily_projection = int(burn_rate * 24)
     weekly_projection = int(burn_rate * 24 * 7)
 
-    # Forecast for 5-hour window
+    # Get calibration data for OAuth-derived limits
+    current_weekly = db.get_usage_in_days(days=7)
+    weekly_total = current_weekly.get("total_tokens", 0)
+    calibration = usage_api.get_calibration_data(current_total, weekly_total)
+
+    # Forecast for 5-hour window using OAuth-derived limit
     five_hour_forecast = None
     will_exceed_5h = False
     time_to_limit = None
+    hours_to_5h_limit = None
+    critical_5h = False  # True if will hit limit before reset
 
-    if config.FIVE_HOUR_LIMIT_TOKENS and burn_rate > 0:
+    # Prefer OAuth-derived limit, fall back to config
+    five_hour_limit = calibration.get("five_hour", {}).get("derived_limit") or config.FIVE_HOUR_LIMIT_TOKENS
+
+    if five_hour_limit and burn_rate > 0:
         # Use simple linear extrapolation based on burn rate
         five_hour_forecast = int(current_total + (burn_rate * 5))
-        will_exceed_5h = five_hour_forecast > config.FIVE_HOUR_LIMIT_TOKENS
+        will_exceed_5h = five_hour_forecast > five_hour_limit
 
-        if will_exceed_5h:
-            remaining = config.FIVE_HOUR_LIMIT_TOKENS - current_total
-            hours_to_limit = remaining / burn_rate
-            time_to_limit = f"{hours_to_limit:.1f}h"
+        if current_total < five_hour_limit:
+            remaining = five_hour_limit - current_total
+            hours_to_5h_limit = remaining / burn_rate
+            will_exceed_5h = True
+            if hours_to_5h_limit < 1:
+                time_to_limit = f"{int(hours_to_5h_limit * 60)}m"
+            else:
+                time_to_limit = f"{hours_to_5h_limit:.1f}h"
+
+            # Check if we'll hit limit before reset (critical warning)
+            five_hour_resets_at = calibration.get("five_hour", {}).get("resets_at")
+            if five_hour_resets_at:
+                try:
+                    reset_time = datetime.fromisoformat(five_hour_resets_at.replace("Z", "+00:00"))
+                    hours_until_reset = (reset_time - datetime.now(reset_time.tzinfo)).total_seconds() / 3600
+                    if hours_to_5h_limit < hours_until_reset:
+                        critical_5h = True
+                except (ValueError, TypeError):
+                    pass
+
+    # Forecast for weekly window using OAuth-derived limit
+    weekly_time_to_limit = None
+    will_exceed_weekly = False
+    hours_to_weekly_limit = None
+    critical_weekly = False  # True if will hit limit before reset
+
+    weekly_limit = calibration.get("seven_day", {}).get("derived_limit")
+
+    if weekly_limit and burn_rate > 0 and weekly_total < weekly_limit:
+        remaining_weekly = weekly_limit - weekly_total
+        hours_to_weekly_limit = remaining_weekly / burn_rate
+        days_to_limit = hours_to_weekly_limit / 24
+
+        # Only show if we'll hit the limit within the week
+        if days_to_limit < 7:
+            will_exceed_weekly = True
+            if days_to_limit < 1:
+                weekly_time_to_limit = f"{hours_to_weekly_limit:.1f}h"
+            else:
+                weekly_time_to_limit = f"{days_to_limit:.1f}d"
+
+            # Check if we'll hit limit before reset (critical warning)
+            weekly_resets_at = calibration.get("seven_day", {}).get("resets_at")
+            if weekly_resets_at:
+                try:
+                    reset_time = datetime.fromisoformat(weekly_resets_at.replace("Z", "+00:00"))
+                    hours_until_reset = (reset_time - datetime.now(reset_time.tzinfo)).total_seconds() / 3600
+                    if hours_to_weekly_limit < hours_until_reset:
+                        critical_weekly = True
+                except (ValueError, TypeError):
+                    pass
 
     return jsonify({
         "hourly_rate": hourly_rate,
@@ -152,7 +212,11 @@ def api_forecast():
         "five_hour_projection": five_hour_forecast,
         "will_exceed_5h": will_exceed_5h,
         "time_to_limit": time_to_limit,
+        "critical_5h": critical_5h,
         "burn_rate_per_min": int(burn_rate / 60) if burn_rate > 0 else 0,
+        "will_exceed_weekly": will_exceed_weekly,
+        "weekly_time_to_limit": weekly_time_to_limit,
+        "critical_weekly": critical_weekly,
     })
 
 

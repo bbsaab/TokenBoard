@@ -179,6 +179,25 @@ header .subtitle {
 .text-yellow { color: var(--yellow); }
 .text-red { color: var(--red); }
 
+/* Critical Warning - will hit limit before reset */
+.critical-warning {
+    animation: pulse-warning 1s ease-in-out infinite;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+}
+
+.stat-value.critical {
+    background: linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(233, 69, 96, 0.1));
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(233, 69, 96, 0.4);
+}
+
+@keyframes pulse-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
 /* Stats Grid */
 .stats-grid {
     display: grid;

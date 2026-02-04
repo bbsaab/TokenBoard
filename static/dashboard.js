@@ -4,6 +4,12 @@
 let hourlyChart = null;
 let weeklyChart = null;
 
+// Cached derived limits from OAuth calibration
+let cachedDerivedLimits = {
+    fiveHour: null,
+    sevenDay: null
+};
+
 // Chart.js default configuration for dark theme
 Chart.defaults.color = '#a0a0a0';
 Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
@@ -94,7 +100,8 @@ async function fetchUsage() {
         // 5-hour window stats
         const fiveHour = data.five_hour || {};
         const fiveHourTotal = fiveHour.total_tokens || 0;
-        const fiveHourLimit = data.five_hour_limit;
+        // Use cached derived limit from OAuth calibration, fall back to config
+        const fiveHourLimit = cachedDerivedLimits.fiveHour || data.five_hour_limit;
 
         // Update 5-hour display
         const hourlyUsageEl = document.getElementById('hourlyUsage');
@@ -114,11 +121,16 @@ async function fetchUsage() {
         const weekly = data.weekly || {};
         const weeklyTotal = weekly.total_tokens || 0;
 
-        // Calculate weekly limit based on model usage
-        const opusLimit = (data.weekly_opus_hours || 35) * (data.opus_tokens_per_hour || 50000);
-        const sonnetLimit = (data.weekly_sonnet_hours || 280) * (data.sonnet_tokens_per_hour || 100000);
-        // Use a blended estimate - assume mostly Sonnet usage for display
-        const weeklyLimit = sonnetLimit;
+        // Use cached derived limit from OAuth calibration, fall back to estimate
+        let weeklyLimit;
+        if (cachedDerivedLimits.sevenDay) {
+            weeklyLimit = cachedDerivedLimits.sevenDay;
+        } else {
+            // Fallback: combined Opus + Sonnet estimate
+            const opusLimit = (data.weekly_opus_hours || 35) * (data.opus_tokens_per_hour || 50000);
+            const sonnetLimit = (data.weekly_sonnet_hours || 280) * (data.sonnet_tokens_per_hour || 100000);
+            weeklyLimit = opusLimit + sonnetLimit;
+        }
 
         const weeklyUsageEl = document.getElementById('weeklyUsage');
         if (weeklyUsageEl) weeklyUsageEl.textContent = formatTokens(weeklyTotal);
@@ -196,8 +208,14 @@ async function fetchForecast() {
         const hourlyForecastEl = document.getElementById('hourlyForecast');
         if (hourlyForecastEl) {
             if (data.will_exceed_5h && data.time_to_limit) {
-                hourlyForecastEl.textContent = 'Limit in ' + data.time_to_limit;
-                hourlyForecastEl.className = 'stat-value text-red';
+                if (data.critical_5h) {
+                    // Critical: will hit limit BEFORE reset
+                    hourlyForecastEl.innerHTML = '<span class="critical-warning">⚠ LIMIT IN ' + data.time_to_limit.toUpperCase() + '</span>';
+                    hourlyForecastEl.className = 'stat-value text-red critical';
+                } else {
+                    hourlyForecastEl.textContent = 'Limit in ' + data.time_to_limit;
+                    hourlyForecastEl.className = 'stat-value text-yellow';
+                }
             } else {
                 hourlyForecastEl.textContent = data.five_hour_projection ?
                     formatTokens(data.five_hour_projection) + ' projected' : 'Safe';
@@ -205,20 +223,26 @@ async function fetchForecast() {
             }
         }
 
-        // Update time remaining (estimate based on 5-hour window)
-        const timeRemainingEl = document.getElementById('hourlyTimeRemaining');
-        if (timeRemainingEl) {
-            // This is an approximation - actual window starts from first message
-            timeRemainingEl.textContent = '~5h rolling';
-        }
+        // Note: Reset time is set by fetchCalibration() using actual OAuth data
 
         // Update weekly forecast
         const weeklyForecastEl = document.getElementById('weeklyForecast');
         if (weeklyForecastEl) {
-            if (data.weekly_projection) {
+            if (data.will_exceed_weekly && data.weekly_time_to_limit) {
+                if (data.critical_weekly) {
+                    // Critical: will hit limit BEFORE reset
+                    weeklyForecastEl.innerHTML = '<span class="critical-warning">⚠ LIMIT IN ' + data.weekly_time_to_limit.toUpperCase() + '</span>';
+                    weeklyForecastEl.className = 'stat-value text-red critical';
+                } else {
+                    weeklyForecastEl.textContent = 'Limit in ' + data.weekly_time_to_limit;
+                    weeklyForecastEl.className = 'stat-value text-yellow';
+                }
+            } else if (data.weekly_projection) {
                 weeklyForecastEl.textContent = formatTokens(data.weekly_projection) + ' projected';
+                weeklyForecastEl.className = 'stat-value';
             } else {
-                weeklyForecastEl.textContent = 'Calculating...';
+                weeklyForecastEl.textContent = 'Safe';
+                weeklyForecastEl.className = 'stat-value text-green';
             }
         }
 
@@ -389,10 +413,13 @@ async function fetchCalibration() {
                 // Update progress bar with official percentage
                 updateProgressBar('hourlyProgress', pct);
 
-                // Update derived limit display
-                const hourlyLimitEl = document.getElementById('hourlyLimit');
-                if (hourlyLimitEl && data.five_hour.derived_limit) {
-                    hourlyLimitEl.textContent = formatTokens(data.five_hour.derived_limit);
+                // Cache and update derived limit display
+                if (data.five_hour.derived_limit) {
+                    cachedDerivedLimits.fiveHour = data.five_hour.derived_limit;
+                    const hourlyLimitEl = document.getElementById('hourlyLimit');
+                    if (hourlyLimitEl) {
+                        hourlyLimitEl.textContent = formatTokens(data.five_hour.derived_limit);
+                    }
                 }
             } else {
                 hourlyOfficialEl.textContent = 'N/A';
@@ -410,10 +437,13 @@ async function fetchCalibration() {
                 // Update progress bar with official percentage
                 updateProgressBar('weeklyProgress', pct);
 
-                // Update derived limit display
-                const weeklyLimitEl = document.getElementById('weeklyLimit');
-                if (weeklyLimitEl && data.seven_day.derived_limit) {
-                    weeklyLimitEl.textContent = formatTokens(data.seven_day.derived_limit);
+                // Cache and update derived limit display
+                if (data.seven_day.derived_limit) {
+                    cachedDerivedLimits.sevenDay = data.seven_day.derived_limit;
+                    const weeklyLimitEl = document.getElementById('weeklyLimit');
+                    if (weeklyLimitEl) {
+                        weeklyLimitEl.textContent = formatTokens(data.seven_day.derived_limit);
+                    }
                 }
             } else {
                 weeklyOfficialEl.textContent = 'N/A';
