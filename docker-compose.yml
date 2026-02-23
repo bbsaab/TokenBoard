@@ -5,9 +5,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # Claude data directory (read-only)
-      # Windows path - adjust if your user folder is different
-      - C:/Users/busin/.claude:/claude-data:ro
+      # Claude data directory (read-only) — set CLAUDE_DATA_DIR in .env
+      - ${CLAUDE_DATA_DIR}:/claude-data:ro
       # Persistent SQLite database
       - ./data:/app/data
     environment:
