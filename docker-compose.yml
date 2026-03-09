@@ -5,8 +5,10 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # Claude data directory (read-only) — set CLAUDE_DATA_DIR in .env
-      - ${CLAUDE_DATA_DIR}:/claude-data:ro
+      # Claude data directory (read-only)
+      # Set CLAUDE_DATA_DIR in .env or environment, defaults to ~/.claude
+      # Linux/Mac: ~/.claude   Windows: C:/Users/YourName/.claude
+      - ${CLAUDE_DATA_DIR:-~/.claude}:/claude-data:ro
       # Persistent SQLite database
       - ./data:/app/data
     environment:

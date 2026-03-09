@@ -353,10 +353,14 @@ def api_refresh():
 @app.route("/api/status")
 def api_status():
     """Return system status information."""
+    import platform
+    claude_path = Path(config.CLAUDE_DATA_PATH)
     return jsonify({
         "watcher_active": _watcher is not None,
         "db_path": config.DB_PATH,
         "claude_data_path": config.CLAUDE_DATA_PATH,
+        "claude_data_exists": claude_path.exists(),
+        "platform": platform.system(),
         "total_records": db.get_record_count(),
         "import_status": _import_status,
     })
