@@ -562,6 +562,20 @@ async function refreshData() {
     ]);
 }
 
+// Refresh countdown
+const REFRESH_INTERVAL = 60;
+let refreshSecondsLeft = REFRESH_INTERVAL;
+
+function tickCountdown() {
+    refreshSecondsLeft--;
+    if (refreshSecondsLeft <= 0) {
+        refreshSecondsLeft = REFRESH_INTERVAL;
+        refreshData();
+    }
+    const el = document.getElementById('refreshCountdown');
+    if (el) el.textContent = refreshSecondsLeft;
+}
+
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
     console.log('TokenBoard initializing...');
@@ -569,8 +583,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial data load
     refreshData();
 
-    // Auto-refresh every 30 seconds
-    setInterval(refreshData, 30000);
+    // Tick countdown every second, triggers refresh at 0
+    setInterval(tickCountdown, 1000);
 
-    console.log('TokenBoard ready - auto-refresh every 30s');
+    console.log('TokenBoard ready - auto-refresh every 60s');
 });

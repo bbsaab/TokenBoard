@@ -1,7 +1,7 @@
 """SQLite database operations for usage tracking."""
 
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -93,9 +93,9 @@ def get_usage_in_window(hours: float = None, since: str = None) -> dict:
         if since:
             cutoff = since
         elif hours:
-            cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
         else:
-            cutoff = (datetime.utcnow() - timedelta(hours=5)).isoformat()
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
 
         # Get totals
         row = conn.execute("""
@@ -171,11 +171,11 @@ def get_hourly_aggregates(hours: int = 24) -> list[dict]:
     """
     conn = get_connection()
     try:
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
         rows = conn.execute("""
             SELECT
-                strftime('%Y-%m-%dT%H:00:00', timestamp) as hour,
+                strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour,
                 COALESCE(SUM(input_tokens), 0) as input_tokens,
                 COALESCE(SUM(output_tokens), 0) as output_tokens,
                 COALESCE(SUM(cache_creation_tokens), 0) as cache_creation_tokens,
@@ -214,7 +214,7 @@ def get_daily_aggregates(days: int = 7) -> list[dict]:
     """
     conn = get_connection()
     try:
-        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
         rows = conn.execute("""
             SELECT

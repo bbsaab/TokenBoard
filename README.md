@@ -8,7 +8,7 @@ A simple dashboard for tracking your Claude token consumption across 5-hour roll
 - **5-hour window view**: Track burst usage within Claude's rolling limit window
 - **Weekly view**: Track cumulative usage against weekly allocation
 - **Forecasting**: Projects usage based on burn rate
-- **Auto-refresh**: Updates every 30 seconds
+- **Auto-refresh**: Updates every 60 seconds
 - **Model breakdown**: See usage split by Opus vs Sonnet
 
 ## Quick Start

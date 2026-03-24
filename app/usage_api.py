@@ -1,7 +1,7 @@
 """OAuth API client for fetching official Claude usage data."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -13,7 +13,9 @@ from . import config
 _oauth_cache = {
     "data": None,
     "timestamp": None,
-    "cache_duration_seconds": 60  # Cache for 1 minute
+    "cache_duration_seconds": 300,  # Cache for 5 minutes
+    "error_until": None,  # Backoff timestamp after errors (e.g. 429)
+    "error_backoff_seconds": 600,  # Wait 10 minutes after an error before retrying
 }
 
 
@@ -81,8 +83,16 @@ def get_oauth_usage_cached() -> Optional[dict]:
     Get OAuth usage with caching to avoid excessive API calls.
 
     Returns cached data if less than cache_duration_seconds old.
+    Implements error backoff to stop hammering the API after 429s.
     """
     now = datetime.now()
+
+    # If we're in error backoff, return stale cached data (or None)
+    if _oauth_cache["error_until"] is not None:
+        if now < _oauth_cache["error_until"]:
+            return _oauth_cache["data"]
+        else:
+            _oauth_cache["error_until"] = None  # Backoff expired
 
     # Check if cache is valid
     if _oauth_cache["data"] is not None and _oauth_cache["timestamp"] is not None:
@@ -95,8 +105,13 @@ def get_oauth_usage_cached() -> Optional[dict]:
     if data:
         _oauth_cache["data"] = data
         _oauth_cache["timestamp"] = now
+    else:
+        # API call failed (429, network error, etc.) — back off
+        _oauth_cache["error_until"] = now + timedelta(
+            seconds=_oauth_cache["error_backoff_seconds"]
+        )
 
-    return data
+    return _oauth_cache["data"]
 
 
 def get_calibration_data(calculated_5h_tokens: int, calculated_7d_tokens: int) -> dict:
