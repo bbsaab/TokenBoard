@@ -187,8 +187,10 @@ def get_hourly_aggregates(hours: int = 24) -> list[dict]:
             ORDER BY hour
         """, (cutoff,)).fetchall()
 
-        return [
-            {
+        # Index actual data by hour key
+        data_by_hour = {}
+        for row in rows:
+            data_by_hour[row["hour"]] = {
                 "hour": row["hour"],
                 "input_tokens": row["input_tokens"],
                 "output_tokens": row["output_tokens"],
@@ -200,8 +202,32 @@ def get_hourly_aggregates(hours: int = 24) -> list[dict]:
                 ),
                 "message_count": row["message_count"]
             }
-            for row in rows
-        ]
+
+        # Build continuous series with zero-filled gaps
+        empty = {
+            "input_tokens": 0, "output_tokens": 0,
+            "cache_creation_tokens": 0, "cache_read_tokens": 0,
+            "total_tokens": 0, "message_count": 0
+        }
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(hours=hours)
+        # Round start up to the next whole hour
+        if start.minute or start.second or start.microsecond:
+            start = start.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        else:
+            start = start.replace(minute=0, second=0, microsecond=0)
+
+        result = []
+        current = start
+        while current <= now:
+            key = current.strftime("%Y-%m-%dT%H:00:00Z")
+            if key in data_by_hour:
+                result.append(data_by_hour[key])
+            else:
+                result.append({"hour": key, **empty})
+            current += timedelta(hours=1)
+
+        return result
     finally:
         conn.close()
 
