@@ -25,10 +25,15 @@ def get_oauth_token() -> Optional[str]:
 
     Returns None if credentials not found or invalid.
     """
+    # Ensure the credentials file is secure
     creds_path = Path(config.CLAUDE_DATA_PATH) / ".credentials.json"
 
     if not creds_path.exists():
         return None
+
+    # Ensure the file is not world-readable
+    if not (creds_path.stat().st_mode & 0o777) == 0o600:
+        print(f"Warning: .credentials.json file has insecure permissions: {creds_path}", flush=True)
 
     try:
         with open(creds_path, "r") as f:
@@ -47,7 +52,7 @@ def fetch_oauth_usage() -> Optional[dict]:
 
     Returns:
         {
-            "five_hour": {"utilization": 36.0, "resets_at": "2026-02-03T..."},
+            "five_hour": {"utilization": 36.0, "resets_at": "2026-02-03T. .."},
             "seven_day": {"utilization": 30.0, "resets_at": "2026-02-10T..."}
         }
 

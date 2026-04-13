@@ -118,7 +118,7 @@ def api_usage():
         "weekly_opus_hours": config.WEEKLY_OPUS_HOURS,
         "weekly_sonnet_hours": config.WEEKLY_SONNET_HOURS,
         "opus_tokens_per_hour": config.OPUS_TOKENS_PER_HOUR,
-        "sonnet_tokens_per_hour": config.SONNET_TOKENS_PER_HOUR,
+        "sonnet_tokens_per_our": config.SONNET_TOKENS_PER_HOUR,
     })
 
 
@@ -499,4 +499,4 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=8080, use_reloader=False)
+    app.run(debug=False, host="0.0.0.0", port=8080, use_reloader=False)

@@ -51,8 +51,12 @@ def discover_claude_data_path() -> str:
     # 3. Return first path that exists
     for path in candidates:
         if path.exists():
-            print(f"Claude data: {path} (auto-detected on {system})", flush=True)
-            return str(path)
+            # Validate that the path is not a symlink or outside of expected directories
+            if not path.is_symlink() and path.parent in [home, Path("/home")]:
+                print(f"Claude data: {path} (auto-detected on {system})", flush=True)
+                return str(path)
+            else:
+                print(f"Warning: Path {path} is a symlink or outside of expected directories", flush=True)
 
     # 4. Default fallback
     default = str(home / ".claude")
