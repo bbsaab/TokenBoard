@@ -655,6 +655,8 @@ function setupBannerDismiss() {
     });
 }
 
+const NOTIF_PROMPT_DISMISSED_KEY = 'tokenboard-notif-prompt-dismissed';
+
 function setupNotificationPrompt() {
     const prompt = document.getElementById('notifPermissionPrompt');
     const enable = document.getElementById('notifEnableBtn');
@@ -662,20 +664,19 @@ function setupNotificationPrompt() {
     if (!prompt || !enable || !skip) return;
     if (typeof Notification === 'undefined') return;          // browser without support
     if (Notification.permission !== 'default') return;        // already granted or denied
-    if (sessionStorage.getItem('tokenboard-notif-prompt-dismissed') === '1') return;
+    if (sessionStorage.getItem(NOTIF_PROMPT_DISMISSED_KEY) === '1') return;
 
     prompt.hidden = false;
 
-    enable.addEventListener('click', () => {
-        Notification.requestPermission().finally(() => {
-            prompt.hidden = true;
-            sessionStorage.setItem('tokenboard-notif-prompt-dismissed', '1');
-        });
-    });
-    skip.addEventListener('click', () => {
+    const dismissPrompt = () => {
         prompt.hidden = true;
-        sessionStorage.setItem('tokenboard-notif-prompt-dismissed', '1');
+        sessionStorage.setItem(NOTIF_PROMPT_DISMISSED_KEY, '1');
+    };
+
+    enable.addEventListener('click', () => {
+        Notification.requestPermission().finally(dismissPrompt);
     });
+    skip.addEventListener('click', dismissPrompt);
 }
 
 // Refresh countdown

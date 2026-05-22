@@ -296,6 +296,6 @@ def get_latest_activity() -> Optional[str]:
         row = conn.execute(
             "SELECT MAX(timestamp) AS latest FROM usage_records"
         ).fetchone()
-        return row["latest"] if row and row["latest"] else None
+        return row["latest"]
     finally:
         conn.close()
