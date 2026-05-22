@@ -17,6 +17,15 @@
                 <span class="status-text">Loading...</span>
             </div>
             <div class="calibration-status" id="calibrationStatus">Connecting...</div>
+            <div class="notif-prompt" id="notifPermissionPrompt" hidden>
+                <span>Enable browser notifications to be alerted when your Claude window expires?</span>
+                <button type="button" id="notifEnableBtn" class="notif-btn notif-btn-primary">Enable</button>
+                <button type="button" id="notifSkipBtn" class="notif-btn">Skip</button>
+            </div>
+            <div class="banner banner-warn" id="windowStateBanner" hidden>
+                <span class="banner-text" id="windowStateBannerText"></span>
+                <button type="button" id="windowStateBannerDismiss" class="banner-dismiss" aria-label="Dismiss">&times;</button>
+            </div>
         </header>
 
         <main>

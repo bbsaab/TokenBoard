@@ -558,8 +558,124 @@ async function refreshData() {
         fetchUsage(),
         fetchForecast(),
         fetchHistory(),
-        fetchCalibration()
+        fetchCalibration(),
+        fetchWindowState()
     ]);
+}
+
+// ===== Proactive Session Refresh (ARCHITECTURE-Proactive-Session-Refresh Phase 1) =====
+
+// Tracks which expired_at values we've already notified for, so the desktop
+// notification fires at most once per expiry event.
+let lastNotifiedExpiredAt = null;
+// Tracks which expired_at values the user has dismissed, so the banner doesn't
+// re-appear within the same session after dismissal.
+let dismissedExpiredAt = null;
+// Latest expired_at rendered to the banner — used by the dismiss handler.
+let currentBannerExpiredAt = null;
+
+function isInQuietHours(quietHoursStr) {
+    // Parse "HH-HH" (e.g., "22-07" means 22:00 through 07:00 local).
+    // Returns true if the current local hour falls in the (possibly midnight-wrapping) range.
+    if (!quietHoursStr || typeof quietHoursStr !== 'string') return false;
+    const parts = quietHoursStr.split('-').map((s) => parseInt(s, 10));
+    if (parts.length !== 2 || parts.some(isNaN)) return false;
+    const [start, end] = parts;
+    const hour = new Date().getHours();
+    return start <= end ? (hour >= start && hour < end) : (hour >= start || hour < end);
+}
+
+function renderWindowBanner(data) {
+    const bannerEl = document.getElementById('windowStateBanner');
+    const textEl = document.getElementById('windowStateBannerText');
+    if (!bannerEl || !textEl) return;
+
+    const shouldShow =
+        data.refresh_recommended &&
+        data.expired_at &&
+        data.expired_at !== dismissedExpiredAt;
+
+    if (!shouldShow) {
+        bannerEl.hidden = true;
+        currentBannerExpiredAt = null;
+        return;
+    }
+
+    const mins = data.minutes_since_expiry;
+    const ago = mins === null || mins === undefined
+        ? 'recently'
+        : (mins < 60 ? `${mins} min ago` : `${Math.floor(mins / 60)}h ${mins % 60}m ago`);
+    textEl.textContent =
+        `Your 5-hour Claude window expired ${ago}. Open Claude Code now to start a fresh one before you sit back down.`;
+    bannerEl.hidden = false;
+    currentBannerExpiredAt = data.expired_at;
+}
+
+function maybeFireNotification(data) {
+    if (!data.notifications_enabled) return;
+    if (!data.refresh_recommended || !data.expired_at) return;
+    if (data.expired_at === lastNotifiedExpiredAt) return;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+    if (isInQuietHours(data.quiet_hours)) {
+        // Banner still shows; only the system notification is suppressed.
+        return;
+    }
+    try {
+        new Notification('TokenBoard: Claude window expired', {
+            body: 'Open Claude Code to start a fresh 5-hour window.',
+            tag: 'tokenboard-window-expired',
+        });
+        lastNotifiedExpiredAt = data.expired_at;
+    } catch (err) {
+        console.error('Notification fire failed:', err);
+    }
+}
+
+async function fetchWindowState() {
+    try {
+        const response = await fetch('/api/window-state');
+        if (!response.ok) throw new Error('Failed to fetch window state');
+        const data = await response.json();
+        renderWindowBanner(data);
+        maybeFireNotification(data);
+    } catch (error) {
+        console.error('Error fetching window state:', error);
+        // Leave existing UI as-is; do not flicker the banner on transient errors.
+    }
+}
+
+function setupBannerDismiss() {
+    const btn = document.getElementById('windowStateBannerDismiss');
+    const banner = document.getElementById('windowStateBanner');
+    if (!btn || !banner) return;
+    btn.addEventListener('click', () => {
+        dismissedExpiredAt = currentBannerExpiredAt;
+        banner.hidden = true;
+    });
+}
+
+function setupNotificationPrompt() {
+    const prompt = document.getElementById('notifPermissionPrompt');
+    const enable = document.getElementById('notifEnableBtn');
+    const skip = document.getElementById('notifSkipBtn');
+    if (!prompt || !enable || !skip) return;
+    if (typeof Notification === 'undefined') return;          // browser without support
+    if (Notification.permission !== 'default') return;        // already granted or denied
+    if (sessionStorage.getItem('tokenboard-notif-prompt-dismissed') === '1') return;
+
+    prompt.hidden = false;
+
+    enable.addEventListener('click', () => {
+        Notification.requestPermission().finally(() => {
+            prompt.hidden = true;
+            sessionStorage.setItem('tokenboard-notif-prompt-dismissed', '1');
+        });
+    });
+    skip.addEventListener('click', () => {
+        prompt.hidden = true;
+        sessionStorage.setItem('tokenboard-notif-prompt-dismissed', '1');
+    });
 }
 
 // Refresh countdown
@@ -579,6 +695,10 @@ function tickCountdown() {
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
     console.log('TokenBoard initializing...');
+
+    // Wire up the window-state banner dismiss + notification permission prompt
+    setupBannerDismiss();
+    setupNotificationPrompt();
 
     // Initial data load
     refreshData();
