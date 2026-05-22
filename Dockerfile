@@ -25,5 +25,14 @@ EXPOSE 8080
 ENV FLASK_APP=app.main
 ENV PYTHONUNBUFFERED=1
 
-# Run the application
-CMD ["python", "-m", "app.main"]
+# Run the application via gunicorn so SIGTERM is handled gracefully.
+# --workers 1 preserves the single-process assumption that the daemon
+# threads and in-memory state in app/main.py rely on.
+CMD ["gunicorn", \
+     "--bind", "0.0.0.0:8080", \
+     "--workers", "1", \
+     "--threads", "4", \
+     "--graceful-timeout", "10", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "app.main:app"]
