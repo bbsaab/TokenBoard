@@ -3,7 +3,7 @@
 **Document Owner:** TokenBoard
 **Version:** 1.0
 **Date:** 2026-05-18
-**Status:** Approved
+**Status:** Complete
 **Related Documents:**
 - [PROPOSAL-Proactive-Session-Refresh](../proposals/PROPOSAL-Proactive-Session-Refresh.md) — research, recommendation, June 15 2026 billing-split caveat.
 

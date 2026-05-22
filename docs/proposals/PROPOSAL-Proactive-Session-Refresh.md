@@ -3,7 +3,7 @@
 **Document Owner:** TokenBoard
 **Version:** 1.0
 **Date:** May 18, 2026
-**Status:** Approved
+**Status:** Complete (Phase 0 + Phase 1; Phase 2 deferred)
 
 ---
 

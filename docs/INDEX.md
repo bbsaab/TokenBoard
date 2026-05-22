@@ -13,8 +13,8 @@
 
 ## Proposals
 
-- **[PROPOSAL-Proactive-Session-Refresh](proposals/PROPOSAL-Proactive-Session-Refresh.md)** — Have TokenBoard nudge (or, optionally, auto-trigger) a fresh Claude 5-hour window during periods of inactivity so the user returns to a partially-elapsed window with a full token bucket. Flags the June 15, 2026 Agent SDK billing split as a Phase 2 blocker. Includes a Phase 0 prerequisite to fix SIGTERM handling.
-  *Status: Approved | Date: 2026-05-18*
+- **[PROPOSAL-Proactive-Session-Refresh](proposals/PROPOSAL-Proactive-Session-Refresh.md)** — Have TokenBoard nudge (or, optionally, auto-trigger) a fresh Claude 5-hour window during periods of inactivity. Flags the June 15, 2026 Agent SDK billing split as a Phase 2 blocker. Includes a Phase 0 prerequisite to fix SIGTERM handling.
+  *Status: Complete (Phase 0 + Phase 1; Phase 2 deferred) | Date: 2026-05-18*
 
 ---
 
@@ -22,8 +22,7 @@
 
 **Purpose:** Documents that define what we will build.
 
-- **[ARCHITECTURE-Proactive-Session-Refresh](architecture/ARCHITECTURE-Proactive-Session-Refresh.md)** — Phase 0 (gunicorn migration to fix SIGTERM handling) + Phase 1 (window-state daemon, `/api/window-state` endpoint, dashboard banner + browser notifications). Phase 2 (automated `claude -p` ping) explicitly deferred pending June 15, 2026 billing-split outcome.
-  *Status: Draft | Date: 2026-05-18*
+*(No active architecture documents. Proactive-Session-Refresh shipped — see Recently Completed.)*
 
 ---
 
@@ -31,7 +30,7 @@
 
 **Purpose:** Documents that summarize what is being built.
 
-*(Implementation documents will be added as features are in progress.)*
+*(No active implementations.)*
 
 ---
 
@@ -39,7 +38,8 @@
 
 **Purpose:** Shipped features with full documentation (< 30 days).
 
-*(Completed docs will be moved here after shipping.)*
+- **[IMPLEMENTATION-Proactive-Session-Refresh](implementation/IMPLEMENTATION-Proactive-Session-Refresh.md)** — Phase 0 (gunicorn migration; shutdown went from ~10 s to ~525 ms) + Phase 1 (window-state daemon, `/api/window-state` endpoint, dashboard banner + browser notifications). Phase 2 (programmatic `claude -p` ping) deferred pending June 15, 2026 billing-split outcome.
+  *Status: Complete | Date: 2026-05-18 | Architecture: [ARCHITECTURE-Proactive-Session-Refresh](architecture/ARCHITECTURE-Proactive-Session-Refresh.md)*
 
 ---
 
