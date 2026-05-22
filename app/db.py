@@ -283,3 +283,19 @@ def get_record_count() -> int:
         return row["count"]
     finally:
         conn.close()
+
+
+def get_latest_activity() -> Optional[str]:
+    """Return the max(timestamp) from usage_records, or None if empty.
+
+    O(1) thanks to the idx_timestamp index — SQLite reads the rightmost
+    B-tree leaf.
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT MAX(timestamp) AS latest FROM usage_records"
+        ).fetchone()
+        return row["latest"] if row and row["latest"] else None
+    finally:
+        conn.close()

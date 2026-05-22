@@ -6,7 +6,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, send_from_directory
 
-from . import config, db, parser, usage_api
+from . import config, db, parser, usage_api, window_state
 from .watcher import create_watcher
 from .forecaster import get_burn_rate, forecast_5hour_usage, UsagePoint
 
@@ -414,6 +414,15 @@ def api_calibration():
     return jsonify(calibration)
 
 
+@app.route("/api/window-state")
+def api_window_state():
+    """Return current 5-hour window state and refresh recommendation."""
+    snapshot = window_state.get_status()
+    snapshot["quiet_hours"] = config.REFRESH_QUIET_HOURS
+    snapshot["notifications_enabled"] = config.REFRESH_NOTIFICATIONS_ENABLED
+    return jsonify(snapshot)
+
+
 def start_watcher():
     """Start the file watcher in a background thread."""
     global _watcher, _watcher_thread
@@ -486,6 +495,11 @@ def init_app():
 
     # Start file watcher for real-time updates
     start_watcher()
+
+    # Start window-state watcher (ARCHITECTURE-Proactive-Session-Refresh Phase 1)
+    window_thread = threading.Thread(target=window_state.run_loop, daemon=True)
+    window_thread.start()
+    print("Window state watcher started", flush=True)
 
     print("=" * 50, flush=True)
     print("TokenBoard ready at http://localhost:8080", flush=True)

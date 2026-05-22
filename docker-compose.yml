@@ -25,4 +25,9 @@ services:
       # - WEEKLY_SONNET_HOURS=280
       # - OPUS_TOKENS_PER_HOUR=50000
       # - SONNET_TOKENS_PER_HOUR=100000
+      # Proactive session refresh (ARCHITECTURE-Proactive-Session-Refresh Phase 1)
+      - REFRESH_CHECK_INTERVAL_SECONDS=300
+      - REFRESH_IDLE_THRESHOLD_MINUTES=30
+      - REFRESH_NOTIFICATIONS_ENABLED=true
+      - REFRESH_QUIET_HOURS=22-07
     restart: unless-stopped
